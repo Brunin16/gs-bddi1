@@ -54,7 +54,7 @@ def extrair_clima_api():
                 "regiao": p["regiao"], "latitude": p["lat"], "longitude": p["lon"],
                 "temperatura_c": cur["temperature_2m"],
                 "umidade_relativa": cur["relative_humidity_2m"],
-                "vento_kmh": cur["wind_speed_10m"],
+                "velocidade_vento_kmh": cur["wind_speed_10m"],
                 "precipitacao_mm": cur["precipitation"],
                 "fonte": "open-meteo",
             })
@@ -64,7 +64,7 @@ def extrair_clima_api():
             registros.append({
                 "regiao": p["regiao"], "latitude": p["lat"], "longitude": p["lon"],
                 "temperatura_c": None, "umidade_relativa": None,
-                "vento_kmh": None, "precipitacao_mm": None,
+                "velocidade_vento_kmh": None, "precipitacao_mm": None,
                 "fonte": "fallback",
             })
     with open(os.path.join(STAGING, "raw_clima.json"), "w") as f:
@@ -117,7 +117,7 @@ def criar_tabelas():
             clima_id NUMBER PRIMARY KEY, regiao VARCHAR2(40),
             latitude NUMBER(8,4), longitude NUMBER(8,4),
             temperatura_c NUMBER(5,1), umidade_relativa NUMBER(5,1),
-            vento_kmh NUMBER(5,1), precipitacao_mm NUMBER(6,1),
+            velocidade_vento_kmh NUMBER(5,1), precipitacao_mm NUMBER(6,1),
             fonte VARCHAR2(20), coletado_em DATE DEFAULT SYSDATE)""",
     ]:
         hook.run(stmt)
@@ -144,7 +144,7 @@ def carregar_oracle():
     c     = pd.read_json(os.path.join(STAGING, "curated_clima.json"))
     c     = c.where(pd.notna(c), None)
     ccols = ["clima_id", "regiao", "latitude", "longitude", "temperatura_c",
-             "umidade_relativa", "vento_kmh", "precipitacao_mm", "fonte"]
+             "umidade_relativa", "velocidade_vento_kmh", "precipitacao_mm", "fonte"]
     cur.execute("DELETE FROM clima_atual")
     cur.executemany(
         f"INSERT INTO clima_atual ({', '.join(ccols)}) "
@@ -161,13 +161,55 @@ def carregar_oracle():
 def analisar():
     hook = OracleHook(oracle_conn_id=ORACLE_CONN_ID)
     consultas = {
-        "Focos por mes": (
-            "SELECT mes, COUNT(*) total, SUM(ocorrencia_foco) focos "
+        "1) Volume de registros e focos por mes": (
+            "SELECT mes, COUNT(*) AS total_observacoes, SUM(ocorrencia_foco) AS total_focos, "
+            "ROUND(AVG(ocorrencia_foco) * 100, 1) AS taxa_foco_pct "
             "FROM foco_queimada GROUP BY mes ORDER BY mes"
         ),
-        "Distribuicao por risco": (
-            "SELECT risco_classe, COUNT(*) qtd FROM foco_queimada "
-            "GROUP BY risco_classe ORDER BY qtd DESC"
+        "2) Estatisticas climaticas por cobertura do solo": (
+            "SELECT tipo_cobertura, COUNT(*) AS registros, "
+            "ROUND(AVG(temperatura_c), 1) AS temp_media, "
+            "ROUND(MIN(umidade_relativa), 1) AS umid_min, "
+            "ROUND(MAX(indice_fwi), 1) AS fwi_max, "
+            "ROUND(AVG(ocorrencia_foco)*100,1) AS taxa_foco_pct "
+            "FROM foco_queimada GROUP BY tipo_cobertura ORDER BY taxa_foco_pct DESC"
+        ),
+        "3) Comparacao estacao seca x estacao umida": (
+            "SELECT CASE WHEN mes BETWEEN 5 AND 9 THEN 'Estacao seca' "
+            "ELSE 'Estacao umida' END AS estacao, "
+            "COUNT(*) AS observacoes, ROUND(AVG(temperatura_c), 1) AS temp_media, "
+            "ROUND(AVG(dias_sem_chuva), 1) AS dias_secos_media, "
+            "ROUND(AVG(ocorrencia_foco) * 100, 1) AS taxa_foco_pct "
+            "FROM foco_queimada "
+            "GROUP BY CASE WHEN mes BETWEEN 5 AND 9 THEN 'Estacao seca' "
+            "ELSE 'Estacao umida' END ORDER BY taxa_foco_pct DESC"
+        ),
+        "4) Ranking dos 5 meses com mais focos": (
+            "SELECT * FROM ("
+            "SELECT mes, SUM(ocorrencia_foco) AS total_focos "
+            "FROM foco_queimada GROUP BY mes ORDER BY total_focos DESC"
+            ") WHERE ROWNUM <= 5"
+        ),
+        "5) Distribuicao por classe de risco com percentual": (
+            "SELECT risco_classe, COUNT(*) AS registros, "
+            "ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS percentual, "
+            "ROUND(AVG(indice_fwi), 1) AS fwi_medio "
+            "FROM foco_queimada GROUP BY risco_classe ORDER BY registros DESC"
+        ),
+        "6) Focos de alto risco em condicao critica": (
+            "SELECT foco_id, tipo_cobertura, temperatura_c, umidade_relativa, "
+            "dias_sem_chuva, indice_fwi, risco_classe "
+            "FROM foco_queimada WHERE risco_classe = 'critico' "
+            "AND umidade_relativa < 30 AND dias_sem_chuva > 20 "
+            "ORDER BY indice_fwi DESC FETCH FIRST 10 ROWS ONLY"
+        ),
+        "7) Cruzamento focos x clima atual (JOIN)": (
+            "SELECT c.regiao, c.temperatura_c AS temp_atual_api, "
+            "COUNT(f.foco_id) AS focos_na_faixa, "
+            "ROUND(AVG(f.indice_fwi), 1) AS fwi_medio_historico "
+            "FROM clima_atual c "
+            "JOIN foco_queimada f ON ROUND(f.latitude) = ROUND(c.latitude) "
+            "GROUP BY c.regiao, c.temperatura_c ORDER BY focos_na_faixa DESC"
         ),
     }
     for titulo, sql in consultas.items():

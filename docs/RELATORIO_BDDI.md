@@ -8,10 +8,6 @@
 | Nome completo | RM |
 |---|---|
 | Bruno Eduardo Caputo Paulino | 558303 |
-| _preencher_ | _preencher_ |
-| _preencher_ | _preencher_ |
-| _preencher_ | _preencher_ |
-| _preencher_ | _preencher_ |
 
 ---
 
@@ -45,14 +41,12 @@ produtores rurais.
 
 ## 4. Arquitetura do pipeline
 
-> _[INSERIR aqui o diagrama de arquitetura — pode usar o diagrama em bloco do README
-> ou redesenhá-lo. Fluxo: fonte → extração → transformação → carga no Oracle → análise SQL]_
 
 ```
-CSV OrbitalFire ─┐
-                 ├─► transformar ─► criar_tabelas ─► carregar_oracle ─► analisar (SQL)
-API Open-Meteo ──┘    (limpeza,        (DDL)           (Oracle)
-                       tipos, risco)
+CSV OrbitalFire ──► extrair_csv ──┐
+                                  ├─► transformar ─► criar_tabelas ─► carregar_oracle ─► analisar (SQL)
+API Open-Meteo ── extrair_clima ──┘    (limpeza,        (DDL)           (Oracle)
+                                        tipos, risco)
 ```
 
 ## 5. Explicação das etapas da DAG
@@ -60,7 +54,7 @@ API Open-Meteo ──┘    (limpeza,        (DDL)           (Oracle)
 A DAG `orbitalfire_bddi_pipeline` (Apache Airflow rodando em Docker, modo
 `standalone`, API clássica com `PythonOperator`) possui 6 tasks:
 
-1. **extrair_csv** — lê o CSV e materializa em Parquet (staging).
+1. **extrair_csv** — lê o CSV e materializa em CSV (staging).
 2. **extrair_clima_api** — coleta clima atual via Open-Meteo; em caso de falha de
    rede, usa *fallback* (o pipeline não quebra).
 3. **transformar** — limpeza, tratamento de nulos, conversão de tipos, padronização e
@@ -93,7 +87,7 @@ a carga só ocorre após `criar_tabelas`; a análise só após a carga.
 `ocorrencia_foco`, `risco_classe`, `data_carga`.
 
 **`clima_atual`** (enriquecimento via API): `clima_id` (PK), `regiao`, `latitude`,
-`longitude`, `temperatura_c`, `umidade_relativa`, `vento_kmh`, `precipitacao_mm`,
+`longitude`, `temperatura_c`, `umidade_relativa`, `velocidade_vento_kmh`, `precipitacao_mm`,
 `fonte`, `coletado_em`.
 
 DDL completo em `sql/01_create_tables.sql`.

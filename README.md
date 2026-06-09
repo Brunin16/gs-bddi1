@@ -59,7 +59,7 @@ Fluxo: **fonte → extração → transformação → carga no Oracle → análi
 
 | Task | Função |
 |---|---|
-| `extrair_csv` | Lê o CSV e materializa em staging (Parquet) |
+| `extrair_csv` | Lê o CSV e materializa em staging (CSV) |
 | `extrair_clima_api` | Coleta clima atual via Open-Meteo (com fallback) |
 | `transformar` | Dedup, tratamento de nulos, conversão de tipos, padronização, deriva `risco_classe`, gera PK |
 | `criar_tabelas` | DDL idempotente (drop+create) das duas tabelas |

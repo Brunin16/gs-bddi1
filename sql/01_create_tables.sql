@@ -1,6 +1,6 @@
 -- ===================================================================
 -- OrbitalFire / BDDI - Modelagem das tabelas no Oracle (oracle.fiap.com.br/ORCL)
--- Executado automaticamente pela task criar_tabelas da DAG.
+-- Referência DDL — a task criar_tabelas da DAG executa este schema inline.
 -- ===================================================================
 
 -- Drop idempotente (ignora ORA-00942: tabela inexistente)
@@ -39,7 +39,7 @@ CREATE TABLE clima_atual (
     longitude        NUMBER(8,4),
     temperatura_c    NUMBER(5,1),
     umidade_relativa NUMBER(5,1),
-    vento_kmh        NUMBER(5,1),
+    velocidade_vento_kmh NUMBER(5,1),
     precipitacao_mm  NUMBER(6,1),
     fonte            VARCHAR2(20),
     coletado_em      DATE DEFAULT SYSDATE
