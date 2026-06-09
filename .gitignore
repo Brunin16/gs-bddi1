@@ -1,0 +1,11 @@
+# Credenciais e ambiente - NUNCA versionar
+.env
+.claude
+*.cfg
+airflow.db
+webserver_config.py
+# Artefatos de execucao
+logs/
+include/staging/
+__pycache__/
+*.pyc

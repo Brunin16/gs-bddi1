@@ -1,0 +1,16 @@
+services:
+  airflow:
+    build: .
+    container_name: airflow
+    restart: always
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - ORBITALFIRE_HOME=/opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./sql:/opt/airflow/sql
+      - ./include:/opt/airflow/include
+    ports:
+      - "8080:8080"
+    command: standalone
